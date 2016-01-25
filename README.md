@@ -3,7 +3,7 @@ Convert files of SVG symbols into separate Illustrator symbol palettes
 
 This was developed from the FreehandToAI.jsx distributed by Adobe.
 
-Open all SVG symbol ready files specified in the user selected folder and save them as AI symbol palettes
+This script will open all SVG symbol ready files specified in the user selected folder and save them as AI symbol palettes
 
 A compatible SVG file must include SVG symbols with an id attribute, like:
 ```
