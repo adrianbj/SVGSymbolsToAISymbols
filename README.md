@@ -1,5 +1,8 @@
 # SVGSymbolsToAISymbols
-Convert files of SVG symbols into separate Illustrator symbol palettes
+
+This Illustrator script will convert SVG symbols to illustrator symbols.
+
+Each file of SVG symbols will be converted into separate a Illustrator symbol palette.
 
 This was developed from the FreehandToAI.jsx distributed by Adobe.
 
