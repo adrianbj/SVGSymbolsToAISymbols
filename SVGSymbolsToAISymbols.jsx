@@ -17,6 +17,7 @@ written permission of Adobe.
 /**
 *
 * Created by Adrian Jones from the FreehandToAI.jsx script by Adobe
+* Updated for modern Illustrator versions
 *
 */
 
@@ -33,86 +34,110 @@ A compatible SVG file must include SVG symbols with an id attribute, like:
 
 The ID will be used for the name of the symbol once converted to an Illustrator symbol palette.
 
-With an appopriate server-side script, online SVG image libraries can be converted into separate
+With an appropriate server-side script, online SVG image libraries can be converted into separate
 SVG files with multiple images (symbols) per file. Each file will be converted into a symbol palette
 containing each of the included symbols.
 
 **********************************************************/
 
+// Global variables
+var inputFolderPrefix = "";
+var destFolder = null;
+var totalFilesConverted = 0;
+
 // Main Code [Execution of script begins here]
 
 try
 {
-	// Get the folder to read files from
-	var inputFolderPath = null;
-    var totalFilesConverted = 0;
-	inputFolderPath = Folder.selectDialog( 'Select SVG Files Location.', '~' );
+    // Get the folder to read files from
+    var inputFolderPath = Folder.selectDialog('Select SVG Files Location.', '~');
 
     if (inputFolderPath != null) {
         // Parse the folder name to get Folder Name Prefix
         var inputFolderStr = inputFolderPath.fullName;
-        //var selectedFolderName = inputFolderPath.displayName;
         var selectedFolderName = inputFolderPath.name;
-        while (selectedFolderName.indexOf ("%20") > 0)
-        {
-            selectedFolderName = selectedFolderName.replace ("%20", " ")
-         }
-        var inputFolderArray = inputFolderStr.split (selectedFolderName);
-        var inputFolderPrefix = inputFolderArray[0];
+
+        // Decode URL encoding
+        if (selectedFolderName) {
+            selectedFolderName = decodeURI(selectedFolderName);
+        }
+
+        if (inputFolderStr && selectedFolderName) {
+            var inputFolderArray = inputFolderStr.split(selectedFolderName);
+            inputFolderPrefix = inputFolderArray[0];
+        }
 
         // Get the folder to save the files into
-        var destFolder = null;
-        destFolder = Folder.selectDialog( 'Select Output AI Location.', '~' );
+        destFolder = Folder.selectDialog('Select Output AI Location.', '~');
 
         if (destFolder != null) {
             app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
 
-            // Set SVG options
-            //var SVGOptions = app.preferences.SVGFileOptions;
-            //SVGOptions.convertTextToOutlines = false;
-            //SVGOptions.importSinglePage = false;
-
             // Recursively read all SVG files and convert to AI
             ConvertSVGToAI(inputFolderPath);
+
+            app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
+            alert(totalFilesConverted + ' SVG files were converted to AI');
         }
     }
-        alert( totalFilesConverted + ' SVG files were converted to AI' );
 }
 catch (err)
 {
-   rs = ("ERROR: " + (err.number & 0xFFFF) + ", " + err.description);
-   alert(rs);
+    app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
+    var errMsg = "ERROR: " + err.number;
+    if (err.description) {
+        errMsg += ", " + err.description;
+    }
+    if (err.line) {
+        errMsg += "\nLine: " + err.line;
+    }
+    alert(errMsg);
 }
 
 
 /**  Function to recursively read all SVG files from the input folder and save them as AI file in the destination folder
-	@param inputFolderPath the input folder path from where SVG files would be read
+    @param inputFolderPath the input folder path from where SVG files would be read
 */
 function ConvertSVGToAI(inputFolderPath)
 {
-
-	var testFiles = new Array();
-	var index = 0;
-
-	// Create output folder path to be created
-	pathToAppend = inputFolderPath.fullName.split(inputFolderPrefix);
-	var saveFolder = destFolder + "/" + pathToAppend[1];
-
-	// Create folder
-
-	fldr = new Folder(saveFolder);
-	fldr.create();
-
-    if (!(fldr.exists))
-    {
-        throw new Error('Access is denied');
+    if (!inputFolderPath || !inputFolderPath.exists) {
+        return;
     }
 
-	// Get list of files/folders in the current working folder
-	testFiles = inputFolderPath.getFiles("*.*");
+    var testFiles = [];
+    var index = 0;
 
-	for (index = 0; index < testFiles.length;index++)
-	{
+    // Create output folder path to be created
+    var saveFolder = destFolder.fullName;
+
+    if (inputFolderPrefix && inputFolderPath.fullName) {
+        var pathToAppend = inputFolderPath.fullName.split(inputFolderPrefix);
+        if (pathToAppend.length > 1 && pathToAppend[1]) {
+            saveFolder = destFolder.fullName + "/" + pathToAppend[1];
+        }
+    }
+
+    // Create folder
+    var fldr = new Folder(saveFolder);
+    if (!fldr.exists) {
+        fldr.create();
+    }
+
+    if (!fldr.exists) {
+        throw new Error('Access is denied - could not create folder: ' + saveFolder);
+    }
+
+    // Get list of files/folders in the current working folder
+    testFiles = inputFolderPath.getFiles();
+
+    if (!testFiles) {
+        return;
+    }
+
+    for (index = 0; index < testFiles.length; index++)
+    {
+        if (!testFiles[index]) continue;
+
         // Check if current item is file or folder
         if (testFiles[index] instanceof Folder)
         {
@@ -121,55 +146,85 @@ function ConvertSVGToAI(inputFolderPath)
         else
         {
             // Selected Item is a file
-            fileName = testFiles[index].displayName;
+            var fileName = testFiles[index].name;
 
-            var fileExtensionArray = fileName.split(".", 2);
-            var fileExtension = fileExtensionArray[1].toUpperCase();
+            if (!fileName) continue;
 
-            // Check is file is a SVG file
-            if (fileExtension == "SVG" )
+            // Check if file has an extension
+            var lastDotIndex = fileName.lastIndexOf(".");
+            if (lastDotIndex === -1) continue;
+
+            var fileExtension = fileName.substring(lastDotIndex + 1).toUpperCase();
+
+            // Check if file is a SVG file
+            if (fileExtension === "SVG")
             {
-                // Open SVG file
-                var docRef =app.open(testFiles[index]);
-                obj_doc=app.activeDocument;
+                try {
+                    // Open SVG file
+                    var docRef = app.open(testFiles[index]);
 
-				// Delete all paths
-				app.activeDocument.symbolItems.removeAll();
+                    if (!docRef) {
+                        continue;
+                    }
 
+                    var obj_doc = app.activeDocument;
 
-                // Create output file path
-                var filePreName = testFiles[index].displayName.split(".",1);
-                sDocumentPath = saveFolder +"/"+ filePreName + ".ai" ;
+                    // Delete all symbol instances (not the symbols themselves)
+                    if (obj_doc.symbolItems && obj_doc.symbolItems.length > 0) {
+                        obj_doc.symbolItems.removeAll();
+                    }
 
-                // Save file as AI
-                SaveAsAI(sDocumentPath);
+                    // Create output file path
+                    var filePreName = fileName.substring(0, lastDotIndex);
+                    var sDocumentPath = saveFolder + "/" + filePreName + ".ai";
 
-                // Increment counter of total number of files converted
-                totalFilesConverted = totalFilesConverted + 1;
+                    // Save file as AI
+                    SaveAsAI(sDocumentPath);
 
-                // Close the document
-                app.activeDocument.close( SaveOptions.DONOTSAVECHANGES );
+                    // Increment counter of total number of files converted
+                    totalFilesConverted = totalFilesConverted + 1;
+
+                    // Close the document
+                    app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);
+                }
+                catch (fileErr) {
+                    var fileErrMsg = "Error processing file: " + fileName;
+                    if (fileErr.description) {
+                        fileErrMsg += "\n" + fileErr.description;
+                    }
+                    alert(fileErrMsg);
+
+                    // Try to close any open document
+                    try {
+                        if (app.documents.length > 0) {
+                            app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);
+                        }
+                    } catch (e) {
+                        // Ignore close errors
+                    }
+                }
             }
         }
     }
 }
 
 /** Save the current opened document as AI file
-	@param sDocumentPath the name of output path where file needs to be saved
+    @param sDocumentPath the name of output path where file needs to be saved
 */
 function SaveAsAI(sDocumentPath)
 {
-    theFile = new File(sDocumentPath);
+    if (!sDocumentPath) {
+        throw new Error("No document path provided");
+    }
+
+    var theFile = new File(sDocumentPath);
 
     // Create AI Save options
-    var aiOptions  = new IllustratorSaveOptions();
+    var aiOptions = new IllustratorSaveOptions();
 
-    // For any changes to Save options please refer to IllustratorSaveOptions in the JavaScript Reference for available options
-
-	// For example, to save file as AI CS5 file use
-	// aiOptions.compatibility = Compatibility.ILLUSTRATOR15; //needs to be at minimum 12 (CS2) to support longer symbol names
-
-    aiOptions.compatibility = Compatibility.ILLUSTRATOR12;
+    // Updated compatibility to Illustrator 2024 (version 24)
+    // You can also try: ILLUSTRATOR27, ILLUSTRATOR17, ILLUSTRATOR15
+    aiOptions.compatibility = Compatibility.ILLUSTRATOR24;
     aiOptions.compressed = true;
     aiOptions.embedICCProfile = false;
     aiOptions.embedLinkedFiles = false;
@@ -177,18 +232,23 @@ function SaveAsAI(sDocumentPath)
     aiOptions.fontSubsetThreshold = 100;
     aiOptions.pdfCompatible = true;
 
-    obj_doc=app.activeDocument;
+    var obj_doc = app.activeDocument;
+
+    if (!obj_doc) {
+        throw new Error("No active document");
+    }
+
     var artboardLength = obj_doc.artboards.length;
 
-    // Uncomment the code below if you want to save each Artboard to seperate file
-  /*  if (artboardLength > 1)
+    // Uncomment the code below if you want to save each Artboard to separate file
+    /*
+    if (artboardLength > 1)
     {
         aiOptions.saveMultipleArtboards = true;
         aiOptions.artboardRange = "";
     }
     */
+
     // Save as AI file
-    obj_doc.saveAs (theFile, aiOptions);
+    obj_doc.saveAs(theFile, aiOptions);
 }
-
-
