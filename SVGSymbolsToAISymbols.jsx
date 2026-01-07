@@ -44,6 +44,7 @@ containing each of the included symbols.
 var inputFolderPrefix = "";
 var destFolder = null;
 var totalFilesConverted = 0;
+var rootInputFolder = null;
 
 // Main Code [Execution of script begins here]
 
@@ -53,6 +54,7 @@ try
     var inputFolderPath = Folder.selectDialog('Select SVG Files Location.', '~');
 
     if (inputFolderPath != null) {
+        rootInputFolder = inputFolderPath;
         // Parse the folder name to get Folder Name Prefix
         var inputFolderStr = inputFolderPath.fullName;
         var selectedFolderName = inputFolderPath.name;
@@ -110,10 +112,17 @@ function ConvertSVGToAI(inputFolderPath)
     // Create output folder path to be created
     var saveFolder = destFolder.fullName;
 
-    if (inputFolderPrefix && inputFolderPath.fullName) {
-        var pathToAppend = inputFolderPath.fullName.split(inputFolderPrefix);
-        if (pathToAppend.length > 1 && pathToAppend[1]) {
-            saveFolder = destFolder.fullName + "/" + pathToAppend[1];
+    if (rootInputFolder && inputFolderPath.fullName !== rootInputFolder.fullName) {
+        var relativePath =
+            inputFolderPath.fullName.substring(rootInputFolder.fullName.length);
+
+        // Remove leading slash if present
+        if (relativePath.charAt(0) === "/" || relativePath.charAt(0) === "\\") {
+            relativePath = relativePath.substring(1);
+        }
+
+        if (relativePath.length > 0) {
+            saveFolder = destFolder.fullName + "/" + relativePath;
         }
     }
 
@@ -222,9 +231,8 @@ function SaveAsAI(sDocumentPath)
     // Create AI Save options
     var aiOptions = new IllustratorSaveOptions();
 
-    // Updated compatibility to Illustrator 2024 (version 24)
-    // You can also try: ILLUSTRATOR27, ILLUSTRATOR17, ILLUSTRATOR15
-    aiOptions.compatibility = Compatibility.ILLUSTRATOR24;
+    // v15 is CC5 (2010)
+    aiOptions.compatibility = Compatibility.ILLUSTRATOR15;
     aiOptions.compressed = true;
     aiOptions.embedICCProfile = false;
     aiOptions.embedLinkedFiles = false;
